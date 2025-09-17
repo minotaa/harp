@@ -9,7 +9,7 @@ import {
 	VoiceChannel,
 	GuildMember,
 	EmbedBuilder
-} from "discord.js";
+} from "discord.js"; // @ts-ignore
 import { Shoukaku, Connectors, LoadType, type Track, Player, ShoukakuEvents } from "shoukaku";
 import Denque from "denque";
 
@@ -73,9 +73,9 @@ client.on('TrackStuckEvent', async (data) => {
 client.on('TrackStartEvent', async (data) => {
 	const guildId = data.guildId;
 	const queue = queues.get(guildId) as any;
-	const player = players.get(guildId);
+	const player = players.get(guildId); // @ts-ignore
 	if (!queue || !player || !player.trackMetadata) return;
-
+	// @ts-ignore
 	const track = player.trackMetadata;
 	const channel = await client.channels.fetch(queue.channel) as TextChannel;
 
@@ -107,8 +107,7 @@ client.on('TrackEndEvent', async (data) => {
 	}
 });
 
-
-
+// @ts-ignore
 client.shoukaku = shoukaku;
 
 client.once(Events.ClientReady, async client => {
