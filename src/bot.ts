@@ -50,6 +50,26 @@ function sanitizeMessage(text: string) {
 }
 
 
+client.on('TrackStuckEvent', async (data) => {
+	const guildId = data.guildId;
+	const player = players.get(guildId);
+	const queue = queues.get(guildId) as any;
+
+	if (!player || !queue) return;
+
+	const channel = await client.channels.fetch(queue.channel) as TextChannel;
+
+	await channel.send("`[✖]` The current track got jammed, skipping...");
+
+	const next = queue.queue.shift();
+	if (next) {
+		await player.playTrack({ track: { encoded: next.encoded } });
+	} else {
+		console.log(Bun.color("yellow", "ansi") + `...`, Bun.color("white", "ansi") + ` Queue empty for guild ${guildId} after a stuck track.`);
+		await channel.send("`[✖]` The current track got jammed, the queue has ended!");
+	}
+})
+
 client.on('TrackStartEvent', async (data) => {
 	const guildId = data.guildId;
 	const queue = queues.get(guildId) as any;
@@ -61,11 +81,11 @@ client.on('TrackStartEvent', async (data) => {
 
 	console.log(
 		Bun.color("green", "ansi") + `✓`,
-		Bun.color("white", "ansi") + ` Now playing in ${guildId}: ${sanitizeMessage(track.info.title)} by ${sanitizeMessage(track.info.author)} (${queue.queue.length + 1} left)`
+		Bun.color("white", "ansi") + ` Now playing in ${guildId}: ${sanitizeMessage(track.info.title)} by ${sanitizeMessage(track.info.author)} (${queue.queue.length} left)`
 	);
 
 	await channel.send(
-		`[\`[✓]\`](${track.info.uri}) Now playing: **${sanitizeMessage(track.info.title)}** by **${sanitizeMessage(track.info.author)}** (${queue.queue.length + 1} left)`
+		`[\`[✓]\`](${track.info.uri}) Now playing: **${sanitizeMessage(track.info.title)}** by **${sanitizeMessage(track.info.author)}** (${queue.queue.length} left)`
 	);
 });
 
@@ -73,16 +93,14 @@ client.on('TrackStartEvent', async (data) => {
 client.on('TrackEndEvent', async (data) => {
 	const guildId = data.guildId;
 	const queue = queues.get(guildId) as any;
-	if (!queue) return;
+	const player = players.get(guildId);
+	if (!queue || !player) return;
 
 	const next = queue.queue.shift();
 	if (next) {
-		const player = players.get(guildId);
-		if (player) {
-			player.trackMetadata = next;
-			await player.playTrack({ track: { encoded: next.encoded } });
-		}
+		await player.playTrack({ track: { encoded: next.encoded } });
 	} else {
+		player.track = null;
 		const channel = await client.channels.fetch(queue.channel) as TextChannel;
 		console.log(Bun.color("yellow", "ansi") + `...`, Bun.color("white", "ansi") + ` Queue empty for guild ${guildId}.`);
 		await channel.send(`\`[...]\` The queue has ended!`);
@@ -106,7 +124,16 @@ client.once(Events.ClientReady, async client => {
       ).toJSON(),
 		new SlashCommandBuilder()
 			.setName('skip')
-			.setDescription('Skips the currently playing song in the queue.')
+			.setDescription('Skips the currently playing song in the queue.'),
+		new SlashCommandBuilder()
+			.setName('stop')
+			.setDescription('Stops playback and clears the queue.'),
+		new SlashCommandBuilder()
+			.setName('nowplaying')
+			.setDescription('View the currently playing song.'),
+		new SlashCommandBuilder()
+			.setName('queue')
+			.setDescription('View the current song queue.')
 	]
 	console.log(Bun.color("green", "ansi") + `✓`, Bun.color("white", "ansi") + (`Ready! Successfully logged in as ${client.user.tag}!`));
 	console.log(Bun.color("yellow", "ansi") + "...", Bun.color("white", "ansi") + ("Attempting to send slash commands to Discord..."));
@@ -171,14 +198,14 @@ client.on(Events.InteractionCreate, async interaction => {
 		}
 
 		const sendNowPlaying = async (track: Track) => {
-			await interaction.editReply(`[\`[✓]\`](${track.info.uri}) Now playing: **${sanitizeMessage(track.info.title)}** by **${sanitizeMessage(track.info.author)}** (${queue.queue.length + 1} left)`);
+			await interaction.editReply(`[\`[✓]\`](${track.info.uri}) Now playing: **${sanitizeMessage(track.info.title)}** by **${sanitizeMessage(track.info.author)}** (${queue.queue.length} left)`);
 		};
 
 		const addToQueueMessage = async (track: Track, bulk = 1) => {
 			if (bulk === 1) {
-				await interaction.editReply(`[\`[✓]\`](${track.info.uri}) Added **${sanitizeMessage(track.info.title)}** by **${sanitizeMessage(track.info.author)}** to the queue. (${queue.queue.length + 1} left)`);
+				await interaction.editReply(`[\`[✓]\`](${track.info.uri}) Added **${sanitizeMessage(track.info.title)}** by **${sanitizeMessage(track.info.author)}** to the queue. (${queue.queue.length} left)`);
 			} else {
-				await interaction.editReply(`\`[✓]\` Added **${bulk}** tracks to the queue. (${queue.queue.length + 1} left)`);
+				await interaction.editReply(`\`[✓]\` Added **${bulk}** tracks to the queue. (${queue.queue.length} left)`);
 			}
 		};
 
@@ -188,7 +215,7 @@ client.on(Events.InteractionCreate, async interaction => {
 				for (const t of tracks) queue.queue.push(t);
 
 				if (!player.track && !player.paused && queue.queue.length > 0) {
-					const next = queue.queue.shift()!;
+					const next = queue.queue.peekFront()!;
 					player.playTrack({ track: { encoded: next.encoded } });
 					await sendNowPlaying(next);
 				} else {
@@ -202,7 +229,7 @@ client.on(Events.InteractionCreate, async interaction => {
 				queue.queue.push(track);
 
 				if (!player.track && !player.paused && queue.queue.length > 0) {
-					const next = queue.queue.shift()!;
+					const next = queue.queue.peekFront()!;
 					player.playTrack({ track: { encoded: next.encoded } });
 					await sendNowPlaying(next);
 				} else {
@@ -216,7 +243,7 @@ client.on(Events.InteractionCreate, async interaction => {
 				queue.queue.push(track);
 
 				if (!player.track && !player.paused && queue.queue.length > 0) {
-					const next = queue.queue.shift()!;
+					const next = queue.queue.peekFront()!;
 					player.playTrack({ track: { encoded: next.encoded } });
 					await sendNowPlaying(next);
 				} else {
@@ -241,20 +268,67 @@ client.on(Events.InteractionCreate, async interaction => {
 			return await interaction.reply('`[✖]` Nothing is playing right now.');
 		}
 
-		const next = queue.queue.shift();
-		if (next) {
-			player.trackMetadata = next;
-			await player.playTrack({ track: { encoded: next.encoded } });
+		player.stopTrack();
+		await interaction.reply('`[✓]` Skipped the current track.');
+	}
 
-			await interaction.reply(
-				`[\`[✓]\`](${next.info.uri}) Skipped the current track to: **${sanitizeMessage(next.info.title)}** by **${sanitizeMessage(next.info.author)}**`
-			);
-		} else {
-			player.stopTrack();
-			await interaction.reply('`[...]\` Skipped the current track. The queue is now empty.');
+	
+	if (interaction.commandName.toLowerCase() === "stop") {
+		const guildId = interaction.guild!.id;
+		const player = players.get(guildId);
+		const queue = queues.get(guildId) as any;
+		const member = interaction.member! as GuildMember;
+
+		if (!member.voice.channel) {
+			return await interaction.reply('`[✖]` You\'re not in a voice channel.');
 		}
-}
 
+		if (!player) {
+			return await interaction.reply('`[✖]` Nothing is playing right now.');
+		}
+
+		if (queue) queue.queue.clear();
+		player.stopTrack();
+
+		await interaction.reply('`[✓]` Stopped playback and cleared the queue.');
+	}
+
+	if (interaction.commandName.toLowerCase() === "nowplaying") {
+		const guildId = interaction.guild!.id;
+		const player = players.get(guildId);
+		const queue = queues.get(guildId) as any;
+
+		if (!queue || queue.queue.isEmpty()) {
+			return await interaction.reply('`[✖]` Nothing is playing right now.');
+		}
+
+		const track = queue.queue.peekFront();
+		const totalLeft = queue ? queue.queue.length : 0;
+
+		await interaction.reply(
+			`[\`[✓]\`](${track.info.uri}) Now playing: **${sanitizeMessage(track.info.title)}** by **${sanitizeMessage(track.info.author)}** (${totalLeft} left)`
+		);
+	}
+
+	if (interaction.commandName.toLowerCase() === "queue") {
+		const guildId = interaction.guild!.id;
+		const player = players.get(guildId);
+		const queue = queues.get(guildId) as any;
+
+		if (!queue || (!player?.track && queue.queue.isEmpty())) {
+			return await interaction.reply("`[✖]` The queue is currently empty.");
+		}
+
+		const tracks: Track[] = [];
+		tracks.push(...queue.queue.toArray());
+
+		const lines = tracks.map((t, i) => {
+			const now = i === 0 && queue.queue.peekAt(0) ? "`[Now Playing]` " : "";
+			return `- ${now}[${i + 1}/${tracks.length}] **${sanitizeMessage(t.info.title)}** by **${sanitizeMessage(t.info.author)}**`;
+		});
+
+		await interaction.reply("**Current Queue:**\n" + lines.join("\n"));
+	}
 })
 
 const rest = new REST();
