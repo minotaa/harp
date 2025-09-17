@@ -8,7 +8,9 @@ import {
 	TextChannel,
 	VoiceChannel,
 	GuildMember,
-	EmbedBuilder
+	EmbedBuilder,
+	type Interaction,
+	ChatInputCommandInteraction
 } from "discord.js"; // @ts-ignore
 import { Shoukaku, Connectors, LoadType, type Track, Player, ShoukakuEvents } from "shoukaku";
 import Denque from "denque";
@@ -147,19 +149,30 @@ client.once(Events.ClientReady, async client => {
   }
 });
 
+const sendNowPlaying = async (interaction: ChatInputCommandInteraction, queue: any, track: Track) => {
+	await interaction.editReply(`[\`[✓]\`](${track.info.uri}) Now playing: **${sanitizeMessage(track.info.title)}** by **${sanitizeMessage(track.info.author)}** (${queue.queue.length} left)`);
+};
+
+const addToQueueMessage = async (interaction: ChatInputCommandInteraction, queue: any, track: Track, bulk = 1) => {
+	if (bulk === 1) {
+		await interaction.editReply(`[\`[✓]\`](${track.info.uri}) Added **${sanitizeMessage(track.info.title)}** by **${sanitizeMessage(track.info.author)}** to the queue. (${queue.queue.length} left)`);
+	} else {
+		await interaction.editReply(`\`[✓]\` Added **${bulk}** tracks to the queue. (${queue.queue.length} left)`);
+	}
+};
+
 client.on(Events.InteractionCreate, async interaction => {
 	if (!interaction.isChatInputCommand()) return;
 	if (interaction.commandName.toLowerCase() === "play") {
+		await interaction.deferReply();
 		let query = interaction.options.getString('query')!;
 		try { new URL(query); } catch {
 			if (!query.startsWith("amsearch:") && !query.startsWith("ytsearch:") && !query.startsWith("spsearch:") && !query.startsWith("scsearch:")) {
 				query = `ytsearch:${query}`;
 			}
 		}
-
-		await interaction.deferReply();
 		const node = shoukaku.getIdealNode();
-		if (!node) throw new Error('No nodes available');
+		if (!node) return await interaction.editReply('`[...]\` No nodes available');
 		console.log(Bun.color("yellow", "ansi") + "...", Bun.color("white", "ansi") + `Searching up: ${query}`);
 		const result = await node.rest.resolve(query);
 
@@ -196,18 +209,6 @@ client.on(Events.InteractionCreate, async interaction => {
 			console.log(Bun.color("green", "ansi") + `✓`, Bun.color("white", "ansi") + `Found previous queue for ${interaction.guild!.name} (${interaction.guild!.id}), using that.`);
 		}
 
-		const sendNowPlaying = async (track: Track) => {
-			await interaction.editReply(`[\`[✓]\`](${track.info.uri}) Now playing: **${sanitizeMessage(track.info.title)}** by **${sanitizeMessage(track.info.author)}** (${queue.queue.length} left)`);
-		};
-
-		const addToQueueMessage = async (track: Track, bulk = 1) => {
-			if (bulk === 1) {
-				await interaction.editReply(`[\`[✓]\`](${track.info.uri}) Added **${sanitizeMessage(track.info.title)}** by **${sanitizeMessage(track.info.author)}** to the queue. (${queue.queue.length} left)`);
-			} else {
-				await interaction.editReply(`\`[✓]\` Added **${bulk}** tracks to the queue. (${queue.queue.length} left)`);
-			}
-		};
-
 		switch (result.loadType) {
 			case LoadType.PLAYLIST: {
 				const tracks = result.data.tracks as any;
@@ -216,9 +217,9 @@ client.on(Events.InteractionCreate, async interaction => {
 				if (!player.track && !player.paused && queue.queue.length > 0) {
 					const next = queue.queue.peekFront()!;
 					player.playTrack({ track: { encoded: next.encoded } });
-					await sendNowPlaying(next);
+					await sendNowPlaying(interaction, queue, next);
 				} else {
-					await addToQueueMessage(tracks[0], tracks.length);
+					await addToQueueMessage(interaction, queue, tracks[0], tracks.length);
 				}
 				break;
 			}
@@ -230,9 +231,9 @@ client.on(Events.InteractionCreate, async interaction => {
 				if (!player.track && !player.paused && queue.queue.length > 0) {
 					const next = queue.queue.peekFront()!;
 					player.playTrack({ track: { encoded: next.encoded } });
-					await sendNowPlaying(next);
+					await sendNowPlaying(interaction, queue, next);
 				} else {
-					await addToQueueMessage(track);
+					await addToQueueMessage(interaction, queue, track);
 				}
 				break;
 			}
@@ -244,9 +245,9 @@ client.on(Events.InteractionCreate, async interaction => {
 				if (!player.track && !player.paused && queue.queue.length > 0) {
 					const next = queue.queue.peekFront()!;
 					player.playTrack({ track: { encoded: next.encoded } });
-					await sendNowPlaying(next);
+					await sendNowPlaying(interaction, queue, next);
 				} else {
-					await addToQueueMessage(track);
+					await addToQueueMessage(interaction, queue, track);
 				}
 				break;
 			}
