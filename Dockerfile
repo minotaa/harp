@@ -15,7 +15,7 @@ COPY --from=bun-deps /app/node_modules ./node_modules
 COPY . .
 
 COPY lavalink/Lavalink.jar ./Lavalink.jar
-COPY lavalink/application.yml ./application.yml
+COPY lavalink/application.example.yml ./application.yml
 COPY --chmod=0755 lavalink/yt-dlp ./yt-dlp
 
 EXPOSE 2333
