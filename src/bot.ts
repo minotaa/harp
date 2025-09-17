@@ -267,7 +267,7 @@ client.on(Events.InteractionCreate, async interaction => {
 		if (!player || !player.track) {
 			return await interaction.reply('`[✖]` Nothing is playing right now.');
 		}
-
+		queue.queue.shift();
 		player.stopTrack();
 		await interaction.reply('`[✓]` Skipped the current track.');
 	}
