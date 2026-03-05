@@ -37,7 +37,6 @@ plugins:
     ytdlp:
       path: "./yt-dlp"
       searchLimit: 10
-      customLoadArgs: ["--cookies-from-browser chrome"]
 logging:
   file:
     path: ./logs/
