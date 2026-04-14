@@ -7,9 +7,7 @@ RUN bun install --frozen-lockfile
 FROM eclipse-temurin:17-jdk AS final
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y curl unzip python3 python3-pip && rm -rf /var/lib/apt/lists/*
-RUN pip install -U yt-dlp yt-dlp-ejs --break-system-packages
-
+RUN apt-get update && apt-get install -y curl unzip python3 && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:$PATH"
 
