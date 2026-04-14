@@ -179,7 +179,7 @@ client.on(Events.InteractionCreate, async interaction => {
 		if (!result || [LoadType.ERROR, LoadType.EMPTY].includes(result.loadType)) {
 			console.log(Bun.color("yellow", "ansi") + "...", Bun.color("white", "ansi") + `Found no results for query: ${query}`);
 			return await interaction.editReply('`[...]\` Found no results for your query.');
-		}
+		} 
 
 		const member = interaction.member! as GuildMember;
 		if (!member.voice.channel) {
