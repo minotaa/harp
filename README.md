@@ -1,15 +1,3 @@
-# harp
+# 🪉 harp
+A dead simple music bot supporting **Soundcloud**, **YouTube**, **Local Files**, **Spotify** & **Apple Music** (Spotify and Apple Music require separate configuration but they can be disabled.)
 
-To install dependencies:
-
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.2.22. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
